@@ -3,11 +3,12 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_community.document_loaders import TextLoader
 from langchain.text_splitter import CharacterTextSplitter
 from langchain_community.vectorstores import Chroma
+from langchain_core.documents.base import Document
 from langchain.chains import create_history_aware_retriever
 from langchain_core.prompts import MessagesPlaceholder
 
 # 设置api key
-OPENAI_API_KEY = "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"
+OPENAI_API_KEY = "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"
 
 #------------------ 设置好相应的模型---------------
 
@@ -75,11 +76,54 @@ def record_char_history(user_content,ai_content):
     chat_info = "user:"+user_content+"\nai:"+ai_content+"\n"
     chat_history.append(chat_info)
 
+import time
+from selenium.webdriver import Edge
+from selenium.webdriver.edge.options import Options
+from selenium.webdriver.common.by import By
+
+my_option = Options()
+my_option.add_argument('headless')
+web = Edge(options=my_option)
+
+def get_search(query):
+    """获取搜索引擎信息"""
+    base_url = 'https://www.baidu.com/s?wd='
+    final_url = base_url + query
+    web.get(url=final_url)
+
+    search_div = web.find_elements(By.CLASS_NAME,'result.c-container.xpath-log.new-pmd')
+
+    link_list = []
+
+    for item in search_div:
+        h3 = item.find_element(By.CLASS_NAME,'c-title.t.t.tts-title')
+        a = h3.find_element(By.TAG_NAME,'a')
+        link = a.get_attribute('href')
+        link_list.append(link)
+
+    rawstring = ""
+    for link in link_list[0:3]:
+        web.get(url=link)
+        time.sleep(0.5)
+        p = web.find_elements(By.TAG_NAME, 'p')
+        for item in p:
+            if item.text == '\n': continue
+            item.text.lstrip()
+            item.text.rstrip()
+            rawstring+=item.text
+            if(len(rawstring) > 12000):break;
+    rawdocuments = [Document(rawstring)]
+    return rawdocuments;
+
+def information_embedding(informations):
+    raw_documents = informations
+    documents = text_splitter.split_documents(raw_documents)
+    return Chroma.from_documents(documents, embeddings_model)
 
 
 if __name__ == '__main__':
     print("Welcome")
-    choice = int(input("1.大模型问答 2.知识库问答:"))
+    choice = int(input("1.大模型问答 2.知识库问答 3.搜索引擎辅助问答:"))
     if choice == 1:
         while True:
             query = input("发送消息:")
@@ -95,6 +139,15 @@ if __name__ == '__main__':
             print(response.content)
             record_char_history(query, response.content)
 
+    elif choice == 3:
+        query = input("需要的信息:")
+        informations = get_search(query)
+        db = information_embedding(informations)
+        print("检索完成")
+        while True:
+            query = input("发送消息")
+            response = ChatWithText(db, query)
+            print(response.content)
 
 
 
